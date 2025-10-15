@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .job-card {
+        border: 2px solid #ddd;
+        margin: 10px 0;
+        transition: border-color 0.3s;
+    }
+    .job-card.selected {
+        border-color: #007bff;
+        background-color: #f8f9fa;
+    }
+    .job-checkbox {
+        transform: scale(1.2);
+        margin-right: 10px;
+    }
+    .series-info-panel {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 15px;
+        margin: 20px 0;
+    }
+    .conflict-warning {
+        background-color: #fff3cd;
+        border: 1px solid #ffecb5;
+        color: #856404;
+        padding: 10px;
+        border-radius: 0.375rem;
+        margin: 10px 0;
+    }
+    .preview-panel {
+        background-color: #e9ecef;
+        border: 1px solid #adb5bd;
+        border-radius: 0.375rem;
+        padding: 15px;
+        margin: 20px 0;
+    }
+    .path-comparison {
+        font-family: monospace;
+        font-size: 0.9em;
+    }
+    .old-path {
+        color: #dc3545;
+        text-decoration: line-through;
+    }
+    .new-path {
+        color: #28a745;
+        font-weight: bold;
+    }
+</style>
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row">
+        <div class="col-12 text-center">
+            <img src="static/img/arm80.png" alt="Automatic Ripping Machine">
+            <h3><strong>Batch Rename TV Series</strong></h3>
+            <p>Select multiple completed TV series discs to rename with a common series name and disc labels</p>
+        </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Batch Rename Controls</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Selection Controls -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <button id="selectAll" class="btn btn-outline-primary">Select All</button>
+                            <button id="selectNone" class="btn btn-outline-secondary">Clear Selection</button>
+                            <span id="selectedCount" class="ml-3">0 jobs selected</span>
+                        </div>
+                        <div class="col-md-6 text-right">
+                            <button id="analyzeSelection" class="btn btn-info" disabled>Analyze Selection</button>
+                        </div>
+                    </div>
+
+                    <!-- Series Information Panel (Initially Hidden) -->
+                    <div id="seriesInfoPanel" class="series-info-panel" style="display: none;">
+                        <h6>Series Information</h6>
+                        <div id="conflictWarning" class="conflict-warning" style="display: none;">
+                            <strong>Warning:</strong> Multiple different series names detected. Please review and choose the correct series name.
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="seriesName">Detected Series Name:</label>
+                                <input type="text" id="seriesName" class="form-control" placeholder="Series name will appear here">
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check mt-4">
+                                    <input type="checkbox" id="useCustomName" class="form-check-input">
+                                    <label class="form-check-label" for="useCustomName">Use Custom Name Instead</label>
+                                </div>
+                                <input type="text" id="customName" class="form-control mt-2" placeholder="Enter custom series name" disabled>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button id="previewRename" class="btn btn-warning" disabled>Preview Changes</button>
+                            <button id="executeRename" class="btn btn-success" disabled>Execute Rename</button>
+                        </div>
+                    </div>
+
+                    <!-- Preview Panel (Initially Hidden) -->
+                    <div id="previewPanel" class="preview-panel" style="display: none;">
+                        <h6>Preview Changes</h6>
+                        <div id="previewContent">
+                            <!-- Preview content will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jobs List -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <h5>Completed TV Series Jobs ({{ jobs|length }} total)</h5>
+            {% if jobs|length == 0 %}
+                <div class="alert alert-info">
+                    <strong>No completed TV series found.</strong> 
+                    Only successfully completed jobs with video type 'series' are shown here.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        {% for job in jobs %}
+        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="card job-card" data-job-id="{{ job.job_id }}">
+                <div class="card-header">
+                    <input type="checkbox" class="job-checkbox" data-job-id="{{ job.job_id }}">
+                    <strong>
+                        {% if job.title_manual %}
+                            {{ job.title_manual }}
+                        {% else %}
+                            {{ job.title }} {% if job.year %}({{ job.year }}){% endif %}
+                        {% endif %}
+                    </strong>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-4">
+                            {% if job.poster_url and job.poster_url != "None" %}
+                                <img src="{{ job.poster_url }}" width="80px" class="img-thumbnail" alt="Poster">
+                            {% else %}
+                                <img src="static/img/none.png" width="80px" class="img-thumbnail" alt="No Poster">
+                            {% endif %}
+                        </div>
+                        <div class="col-8">
+                            <small>
+                                <strong>Job ID:</strong> {{ job.job_id }}<br>
+                                <strong>Label:</strong> {{ job.label or 'No label' }}<br>
+                                <strong>Date:</strong> {{ job.start_time.strftime('%Y-%m-%d') if job.start_time }}<br>
+                                <strong>Status:</strong> <span class="badge badge-success">{{ job.status }}</span><br>
+                                <strong>Path:</strong><br>
+                                <code class="small">{{ job.path or 'No path' }}</code>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-body text-center">
+                <div class="spinner-border" role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
+                <p class="mt-3">Processing...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Results Modal -->
+<div class="modal fade" id="resultsModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Batch Rename Results</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body" id="resultsContent">
+                <!-- Results content will be populated by JavaScript -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="window.location.reload()">Refresh Page</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const jobCheckboxes = document.querySelectorAll('.job-checkbox');
+    const jobCards = document.querySelectorAll('.job-card');
+    const selectedCountSpan = document.getElementById('selectedCount');
+    const analyzeButton = document.getElementById('analyzeSelection');
+    const seriesInfoPanel = document.getElementById('seriesInfoPanel');
+    const previewPanel = document.getElementById('previewPanel');
+    const useCustomNameCheck = document.getElementById('useCustomName');
+    const customNameInput = document.getElementById('customName');
+    const seriesNameInput = document.getElementById('seriesName');
+    const previewButton = document.getElementById('previewRename');
+    const executeButton = document.getElementById('executeRename');
+
+    // Selection management
+    function updateSelectionCount() {
+        const selectedJobs = document.querySelectorAll('.job-checkbox:checked');
+        const count = selectedJobs.length;
+        selectedCountSpan.textContent = `${count} job${count === 1 ? '' : 's'} selected`;
+        analyzeButton.disabled = count === 0;
+        
+        // Update card styling
+        jobCards.forEach(card => {
+            const checkbox = card.querySelector('.job-checkbox');
+            if (checkbox.checked) {
+                card.classList.add('selected');
+            } else {
+                card.classList.remove('selected');
+            }
+        });
+    }
+
+    // Event listeners for job selection
+    jobCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectionCount);
+    });
+
+    // Click on card to toggle checkbox
+    jobCards.forEach(card => {
+        card.addEventListener('click', function(e) {
+            if (e.target.type !== 'checkbox') {
+                const checkbox = card.querySelector('.job-checkbox');
+                checkbox.checked = !checkbox.checked;
+                updateSelectionCount();
+            }
+        });
+    });
+
+    // Select All/None buttons
+    document.getElementById('selectAll').addEventListener('click', function() {
+        jobCheckboxes.forEach(checkbox => checkbox.checked = true);
+        updateSelectionCount();
+    });
+
+    document.getElementById('selectNone').addEventListener('click', function() {
+        jobCheckboxes.forEach(checkbox => checkbox.checked = false);
+        updateSelectionCount();
+        seriesInfoPanel.style.display = 'none';
+        previewPanel.style.display = 'none';
+    });
+
+    // Custom name toggle
+    useCustomNameCheck.addEventListener('change', function() {
+        customNameInput.disabled = !this.checked;
+        if (this.checked) {
+            customNameInput.focus();
+        }
+        validateForm();
+    });
+
+    // Series name and custom name validation
+    seriesNameInput.addEventListener('input', validateForm);
+    customNameInput.addEventListener('input', validateForm);
+
+    function validateForm() {
+        const hasSeriesName = seriesNameInput.value.trim().length > 0;
+        const hasCustomName = useCustomNameCheck.checked && customNameInput.value.trim().length > 0;
+        const isValid = hasSeriesName || hasCustomName;
+        
+        previewButton.disabled = !isValid;
+        executeButton.disabled = !isValid;
+    }
+
+    // Analyze Selection
+    analyzeButton.addEventListener('click', function() {
+        const selectedJobs = Array.from(document.querySelectorAll('.job-checkbox:checked'))
+            .map(cb => parseInt(cb.dataset.jobId));
+        
+        fetch('/get_series_info', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ job_ids: selectedJobs })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                seriesNameInput.value = data.suggested_series_name;
+                
+                const conflictWarning = document.getElementById('conflictWarning');
+                if (data.has_conflicts) {
+                    conflictWarning.style.display = 'block';
+                    conflictWarning.innerHTML = `<strong>Warning:</strong> Multiple series names found: ${data.series_names_found.join(', ')}. Please review and choose the correct series name.`;
+                } else {
+                    conflictWarning.style.display = 'none';
+                }
+                
+                seriesInfoPanel.style.display = 'block';
+                validateForm();
+            } else {
+                alert('Error analyzing selection: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error analyzing selection');
+        });
+    });
+
+    // Preview Changes
+    previewButton.addEventListener('click', function() {
+        const selectedJobs = Array.from(document.querySelectorAll('.job-checkbox:checked'))
+            .map(cb => parseInt(cb.dataset.jobId));
+        
+        const series_name = seriesNameInput.value.trim();
+        const use_custom_name = useCustomNameCheck.checked;
+        const custom_name = customNameInput.value.trim();
+        
+        fetch('/preview_rename', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                job_ids: selectedJobs,
+                series_name: series_name,
+                use_custom_name: use_custom_name,
+                custom_name: custom_name
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                let previewHtml = '<table class="table table-sm"><thead><tr><th>Job</th><th>Current → New Path</th></tr></thead><tbody>';
+                data.preview.forEach(item => {
+                    previewHtml += `
+                        <tr>
+                            <td><strong>Job ${item.job_id}</strong><br><small>${item.current_title}</small></td>
+                            <td class="path-comparison">
+                                <div class="old-path">${item.current_path}</div>
+                                <div class="new-path">${item.new_path}</div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                previewHtml += '</tbody></table>';
+                
+                document.getElementById('previewContent').innerHTML = previewHtml;
+                previewPanel.style.display = 'block';
+            } else {
+                alert('Error previewing changes: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error previewing changes');
+        });
+    });
+
+    // Execute Rename
+    executeButton.addEventListener('click', function() {
+        if (!confirm('Are you sure you want to rename the selected jobs? This action cannot be undone.')) {
+            return;
+        }
+        
+        const selectedJobs = Array.from(document.querySelectorAll('.job-checkbox:checked'))
+            .map(cb => parseInt(cb.dataset.jobId));
+        
+        const series_name = seriesNameInput.value.trim();
+        const use_custom_name = useCustomNameCheck.checked;
+        const custom_name = customNameInput.value.trim();
+        
+        // Show loading modal
+        $('#loadingModal').modal('show');
+        
+        fetch('/execute_rename', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                job_ids: selectedJobs,
+                series_name: series_name,
+                use_custom_name: use_custom_name,
+                custom_name: custom_name
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            $('#loadingModal').modal('hide');
+            
+            if (data.success) {
+                let resultsHtml = `<div class="alert alert-info">Successfully renamed ${data.successful_renames} out of ${data.total_processed} jobs.</div>`;
+                resultsHtml += '<table class="table table-sm"><thead><tr><th>Job ID</th><th>Result</th><th>Details</th></tr></thead><tbody>';
+                
+                data.results.forEach(result => {
+                    const statusClass = result.success ? 'success' : 'danger';
+                    const statusText = result.success ? 'Success' : 'Failed';
+                    const details = result.success ? 
+                        `Renamed to: <code>${result.new_path}</code>` : 
+                        `Error: ${result.error}`;
+                    
+                    resultsHtml += `
+                        <tr class="table-${statusClass}">
+                            <td>${result.job_id}</td>
+                            <td><span class="badge badge-${statusClass}">${statusText}</span></td>
+                            <td>${details}</td>
+                        </tr>
+                    `;
+                });
+                
+                resultsHtml += '</tbody></table>';
+                
+                document.getElementById('resultsContent').innerHTML = resultsHtml;
+                $('#resultsModal').modal('show');
+            } else {
+                alert('Error executing rename: ' + data.error);
+            }
+        })
+        .catch(error => {
+            $('#loadingModal').modal('hide');
+            console.error('Error:', error);
+            alert('Error executing rename');
+        });
+    });
+
+    // Initialize
+    updateSelectionCount();
+});
+</script>
+
+<script type="application/javascript">activeTab("batchrename");</script>
+
+{% endblock %}
