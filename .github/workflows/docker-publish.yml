@@ -1,6 +1,13 @@
 name: "ARM TEST Build and Publish Docker Image"
 
 on:
+  push:
+    branches:
+      - main
+      - workflow-deploy-publish
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 env:
