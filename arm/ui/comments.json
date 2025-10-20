@@ -34,6 +34,7 @@
   "RIP_POSTER": "# Rip DVD Posters from JACKET_P folder\n# Requires FFmpeg",
   "UNIDENTIFIED_EJECT": "# Auto-eject unidentified discs (blank etc)\n# May want to set this to false on certain (Pioneer slim) drives to prevent the immediate eject\n# issue (https://github.com/automatic-ripping-machine/automatic-ripping-machine/issues/779)",
   "AUTO_EJECT": "# Auto-ejects disks\n# Auto-ejects disks when complete etc\n# Set to false to disable auto-ejection",
+  "USE_DISC_LABEL_FOR_TV_SERIES": "# Use DVD label as output folder name for TV series with undefined episodes\n# When set to true, the DVD label (disc volume name) will be used as the folder name for TV series\n# to avoid timestamp-based duplicate folders when episodes are not properly defined\n# This helps with batch renaming TV episodes using external tools",
   "ABCDE_CONFIG_FILE": "# Location of your ABCDE config file",
   "RAW_PATH": "# Path to raw MakeMKV directory\n# Destination for MakeMKV and source for HandBrake",
   "TRANSCODE_PATH": "# Intermediary directory for transcoding files\n# Destination for HandBrake",
