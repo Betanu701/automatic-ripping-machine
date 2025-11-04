@@ -21,7 +21,7 @@ def upgrade():
     op.create_table(
         'batch_rename_history',
         sa.Column('history_id', sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column('batch_id', sa.String(64), nullable=False, index=True),
+        sa.Column('batch_id', sa.String(64), nullable=False),
         sa.Column('job_id', sa.Integer(), sa.ForeignKey('job.job_id'), nullable=False),
         sa.Column('old_path', sa.String(512), nullable=False),
         sa.Column('new_path', sa.String(512), nullable=False),
