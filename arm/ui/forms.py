@@ -37,12 +37,30 @@ class SettingsForm(FlaskForm):
     HB_PRESET_DVD = StringField('HB_PRESET_DVD', validators=[DataRequired()])
     HB_PRESET_BD = StringField('HB_PRESET_BD', validators=[DataRequired()])
     HANDBRAKE_CLI = StringField('HANDBRAKE_CLI', validators=[DataRequired()])
-    DBFILE = StringField('DBFILE', validators=[DataRequired()])
+    DBFILE = StringField('DBFILE', validators=[Optional()])
     LOGPATH = StringField('LOGPATH', validators=[DataRequired()])
     INSTALLPATH = StringField('INSTALLPATH', validators=[DataRequired()])
     RAW_PATH = StringField('RAW_PATH', validators=[DataRequired()])
     TRANSCODE_PATH = StringField('TRANSCODE_PATH', validators=[DataRequired()])
     COMPLETED_PATH = StringField('COMPLETED_PATH', validators=[DataRequired()])
+    submit = SubmitField('Submit')
+
+
+class DatabaseSettingsForm(FlaskForm):
+    """Database configuration editor surfaced under Settings."""
+
+    DATABASE_ENGINE = StringField('DATABASE_ENGINE', validators=[DataRequired()])
+    DATABASE_URL = StringField('DATABASE_URL', validators=[Optional()])
+    DATABASE_HOST = StringField('DATABASE_HOST', validators=[Optional()])
+    DATABASE_PORT = StringField('DATABASE_PORT', validators=[Optional()])
+    DATABASE_NAME = StringField('DATABASE_NAME', validators=[Optional()])
+    DATABASE_USER = StringField('DATABASE_USER', validators=[Optional()])
+    DATABASE_PASSWORD = StringField('DATABASE_PASSWORD', validators=[Optional()])
+    DATABASE_OPTIONS = StringField('DATABASE_OPTIONS', validators=[Optional()])
+    DBFILE = StringField('DBFILE', validators=[Optional()])
+    DATABASE_BACKUP_PATH = StringField('DATABASE_BACKUP_PATH', validators=[DataRequired()])
+    SQLALCHEMY_DATABASE_URI = StringField('SQLALCHEMY_DATABASE_URI', validators=[Optional()])
+    DATABASE_IS_FILE_BACKED = StringField('DATABASE_IS_FILE_BACKED', validators=[Optional()])
     submit = SubmitField('Submit')
 
 

@@ -139,6 +139,10 @@
                 e.preventDefault();
                 sendSettings($("#ripperSettings"), "/save_settings");
             })
+            $("#databaseSettingsForm").submit(function (e) {
+                e.preventDefault();
+                sendSettings($("#databaseSettingsForm"), "/save_database_settings");
+            });
             $("#abcdeSettings").submit(function (e) {
                 e.preventDefault();
                 sendSettings($("#abcdeSettings"), "/save_abcde_settings");

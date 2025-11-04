@@ -745,22 +745,43 @@ def trigger_restart():
     set_file_last_modified(arm_main, now)
 
 
-def build_arm_cfg(form_data, comments):
+def build_arm_cfg(form_data, comments, existing_config=None):
     """
     Main function for saving new updated arm.yaml\n
     :param form_data: post data
     :param comments: comments file loaded as dict
+    :param existing_config: current configuration used to fill missing keys
     :return: full new arm.yaml as a String
     """
+    from collections import OrderedDict
+
+    def _stringify(value):
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
+    overrides = OrderedDict(
+        (key, value) for key, value in form_data.items() if key != "csrf_token"
+    )
+
+    if existing_config is not None:
+        pending = OrderedDict(overrides)
+        merged = OrderedDict()
+        for key, existing_value in existing_config.items():
+            if key in pending:
+                merged[key] = pending.pop(key)
+            else:
+                merged[key] = _stringify(existing_value)
+        merged.update(pending)
+    else:
+        merged = overrides
+
     arm_cfg = comments['ARM_CFG_GROUPS']['BEGIN'] + "\n\n"
-    # This is not the safest way to do things.
-    # It assumes the user isn't trying to mess with us.
-    # This really should be hard coded.
     app.logger.debug("save_settings: START")
-    for key, value in form_data.items():
+    for key, value in merged.items():
         app.logger.debug(f"save_settings: current key {key} = {value} ")
-        if key == "csrf_token":
-            continue
         # Add any grouping comments
         arm_cfg += config_utils.arm_yaml_check_groups(comments, key)
         # Check for comments for this key in comments.json, add them if they exist

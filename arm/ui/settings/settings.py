@@ -20,6 +20,7 @@ import re
 import subprocess
 from datetime import datetime
 import os
+from collections import OrderedDict
 
 import sqlalchemy
 
@@ -43,6 +44,7 @@ from arm.ui.forms import (
     SystemInfoDrives,
     DatabaseBackupForm,
     DatabaseRestoreForm,
+    DatabaseSettingsForm,
 )
 from arm.ui.settings.ServerUtil import ServerUtil
 import arm.ripper.utils as ripper_utils
@@ -51,6 +53,20 @@ route_settings = Blueprint('route_settings', __name__,
                            template_folder='templates',
                            static_folder='../static')
 REDIRECT_SETTINGS = "route_settings.settings"
+DATABASE_SETTING_KEYS = [
+    "DATABASE_ENGINE",
+    "DATABASE_URL",
+    "DATABASE_HOST",
+    "DATABASE_PORT",
+    "DATABASE_NAME",
+    "DATABASE_USER",
+    "DATABASE_PASSWORD",
+    "DATABASE_OPTIONS",
+    "DBFILE",
+    "DATABASE_BACKUP_PATH",
+    "SQLALCHEMY_DATABASE_URI",
+    "DATABASE_IS_FILE_BACKED",
+]
 
 
 def mask_last(value, n=4):
@@ -107,6 +123,21 @@ def settings():
     # ARM UI config
     armui_cfg = ui_utils.arm_db_cfg()
 
+    def _stringify_setting(value):
+        if value is None:
+            return ""
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+
+    database_settings = OrderedDict()
+    ripper_settings = OrderedDict()
+    for key, value in cfg.arm_config.items():
+        if key in DATABASE_SETTING_KEYS:
+            database_settings[key] = _stringify_setting(value)
+        else:
+            ripper_settings[key] = value
+
     # Get system details from Server Info and Config
     server = SystemInfo.query.filter_by(id="1").first()
     serverutil = ServerUtil()
@@ -120,6 +151,11 @@ def settings():
     form_drive = SystemInfoDrives(request.form)
     backup_form = DatabaseBackupForm()
     restore_form = DatabaseRestoreForm()
+    database_form = DatabaseSettingsForm()
+    for key, value in database_settings.items():
+        field = getattr(database_form, key, None)
+        if field is not None:
+            field.data = value
 
     # Load up the comments.json, so we can comment the arm.yaml
     comments = ui_utils.generate_comments()
@@ -131,6 +167,8 @@ def settings():
 
     return render_template("settings/settings.html",
                            settings=cfg.arm_config,
+                           ripper_settings=ripper_settings,
+                           database_settings=database_settings,
                            ui_settings=armui_cfg,
                            stats=stats,
                            apprise_cfg=cfg.apprise_config,
@@ -143,6 +181,7 @@ def settings():
                            media_path=media_path,
                            drives=drives,
                            form_drive=form_drive,
+                           database_form=database_form,
                            backup_form=backup_form,
                            restore_form=restore_form)
 
@@ -195,7 +234,7 @@ def save_settings():
     form = SettingsForm()
     if form.validate_on_submit():
         # Build the new arm.yaml with updated values from the user
-        arm_cfg = ui_utils.build_arm_cfg(request.form.to_dict(), comments)
+        arm_cfg = ui_utils.build_arm_cfg(request.form.to_dict(), comments, cfg.arm_config)
         # Save updated arm.yaml
         with open(cfg.arm_config_path, "w") as settings_file:
             settings_file.write(arm_cfg)
@@ -208,6 +247,26 @@ def save_settings():
 
     # If we get to here there was no post data
     return {'success': success, 'settings': cfg.arm_config, 'form': 'arm ripper settings'}
+
+
+@route_settings.route('/save_database_settings', methods=['POST'])
+@login_required
+def save_database_settings():
+    """Persist database specific configuration values from the Settings page."""
+
+    comments = ui_utils.generate_comments()
+    success = False
+    arm_cfg = {}
+    form = DatabaseSettingsForm()
+    if form.validate_on_submit():
+        arm_cfg = ui_utils.build_arm_cfg(request.form.to_dict(), comments, cfg.arm_config)
+        with open(cfg.arm_config_path, "w") as settings_file:
+            settings_file.write(arm_cfg)
+            settings_file.close()
+        success = True
+        importlib.reload(cfg)
+
+    return {'success': success, 'settings': cfg.arm_config, 'form': 'database settings'}
 
 
 @route_settings.route('/save_ui_settings', methods=['POST'])

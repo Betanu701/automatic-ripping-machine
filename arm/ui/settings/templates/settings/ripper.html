@@ -3,7 +3,7 @@
         <h4> Ripper ARM Settings </h4>
         <form id="ripperSettings" name="ripperSettings" method="post" action="">
             {{ form.hidden_tag() }}
-            {% for k, v in settings.items() %}
+            {% for k, v in ripper_settings.items() %}
                 <div class="input-group mb-3">
                     <div class="input-group-prepend">
                         <span class="input-group-text" id="{{ k }}">{{ k }}: </span>
