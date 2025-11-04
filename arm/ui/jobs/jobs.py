@@ -404,6 +404,8 @@ def batch_rename_api():
             consolidate = data.get('consolidate', False)
             include_year = data.get('include_year', True)
             outlier_resolution = data.get('outlier_resolution', {})
+            selected_series_key = data.get('selected_series_key')
+            force_series_override = data.get('force_series_override', False)
 
             preview = br.preview_batch_rename(
                 job_ids=job_ids,
@@ -411,7 +413,9 @@ def batch_rename_api():
                 zero_padded=zero_padded,
                 consolidate=consolidate,
                 include_year=include_year,
-                outlier_resolution=outlier_resolution
+                outlier_resolution=outlier_resolution,
+                selected_series_key=selected_series_key,
+                force_series_override=force_series_override,
             )
 
             # Add naming options to preview for frontend
@@ -433,6 +437,8 @@ def batch_rename_api():
             include_year = data.get('include_year', True)
             outlier_resolution = data.get('outlier_resolution', {})
             batch_id = data.get('batch_id')
+            selected_series_key = data.get('selected_series_key')
+            force_series_override = data.get('force_series_override', False)
 
             # Generate batch ID if not provided
             if not batch_id:
@@ -445,7 +451,9 @@ def batch_rename_api():
                 zero_padded=zero_padded,
                 consolidate=consolidate,
                 include_year=include_year,
-                outlier_resolution=outlier_resolution
+                outlier_resolution=outlier_resolution,
+                selected_series_key=selected_series_key,
+                force_series_override=force_series_override,
             )
 
             # Execute the rename
