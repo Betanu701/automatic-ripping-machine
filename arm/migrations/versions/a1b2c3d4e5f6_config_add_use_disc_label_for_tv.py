@@ -1,7 +1,7 @@
 """Add USE_DISC_LABEL_FOR_TV to config
 
 Revision ID: a1b2c3d4e5f6
-Revises: 95623e8c5d58
+Revises: a79af75f4b31
 Create Date: 2025-10-18 12:00:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'a1b2c3d4e5f6'
-down_revision = '95623e8c5d58'
+down_revision = 'a79af75f4b31'
 branch_labels = None
 depends_on = None
 
