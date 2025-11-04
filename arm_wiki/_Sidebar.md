@@ -22,7 +22,11 @@
     - [Drive Management](Web-Settings-Drives)
     - [UI Settings](Web-Settings-UI)
     - [System Information](Web-Settings-System-Info)
-   - [Database Restore](Web-Database-Restore)
+  
+**Features**
+  - [Using Disc Label for TV Series](Using-Disc-Label-for-TV-Series)
+  - [Batch Rename TV Series Discs](Batch-Rename-TV-Series)
+  - [Database Restore](Web-Database-Restore)
 
 **[Known Issues](https://github.com/automatic-ripping-machine/automatic-ripping-machine/wiki/Known-Issues)**
 
