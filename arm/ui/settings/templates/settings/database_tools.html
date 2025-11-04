@@ -9,6 +9,39 @@
             </div>
         </div>
         <div class="row my-3">
+            <div class="col-lg-9 col-xl-8 mx-auto">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-secondary text-white">
+                        <strong>Database Settings</strong>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">Adjust the database connection parameters and storage locations used by ARM.</p>
+                        <form id="databaseSettingsForm" name="databaseSettingsForm" method="post" action="">
+                            {{ database_form.hidden_tag() }}
+                            {% for k, v in database_settings.items() %}
+                                <div class="input-group mb-3">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text" id="{{ k }}">{{ k }}: </span>
+                                    </div>
+                                    <input type="text" class="form-control" aria-label="{{ k }}" name="{{ k }}"
+                                           placeholder="{{ v }}" value="{{ v }}" aria-describedby="{{ k }}">
+                                    {% if jsoncomments.get(k) %}
+                                        <a class="popovers" onClick='return false;' href=""
+                                           data-content="{{ jsoncomments[k]| replace("#", "\n") }}" rel="popover"
+                                           data-placement="top" data-original-title="{{ k }}">
+                                            <img title="More information" src="{{ url_for('static', filename='img/info.png') }}" width="30px"
+                                                 height="35px" alt="More Info">
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                            <button id="databaseSettingsSubmit" class="btn btn-secondary btn-lg btn-block" type="submit">Save Settings</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row my-3">
             <div class="col-lg-6 col-md-8 mx-auto">
                 <div class="card shadow-sm">
                     <div class="card-header bg-info text-white">
