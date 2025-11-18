@@ -10,11 +10,22 @@
 function escapeHtml(unsafe) {
     if (unsafe == null) return '';
     return String(unsafe)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function formatTypeBadge(type, defaultClass = 'badge badge-secondary') {
+    const normalizedType = (type || '').toLowerCase();
+    if (normalizedType === 'series') {
+        return '<span class="badge badge-success">TV Series</span>';
+    }
+    if (normalizedType === 'movie') {
+        return '<span class="badge badge-primary">Movie</span>';
+    }
+    return `<span class="${defaultClass}">${escapeHtml(type || 'Unknown')}</span>`;
 }
 
 let selectedJobs = new Set();
@@ -94,7 +105,6 @@ function handleCheckboxChange() {
     const checkbox = $(this);
     const row = checkbox.closest('.batch-table-row');
     const jobId = checkbox.data('job-id');
-    const videoType = checkbox.data('video-type');
     
     if (checkbox.is(':checked')) {
         selectedJobs.add(jobId);
@@ -220,7 +230,7 @@ function openBatchRenameModal() {
     hasNonSeries = false;
     let nonSeriesJobs = [];
     
-    selectedJobs.forEach(jobId => {
+    for (const jobId of selectedJobs) {
         const checkbox = $(`.batch-checkbox[data-job-id="${jobId}"]`);
         const videoType = checkbox.data('video-type');
         const row = checkbox.closest('.job-table-row');
@@ -234,7 +244,7 @@ function openBatchRenameModal() {
                 title: title
             });
         }
-    });
+    }
     
     // Reset modal and show appropriate first step
     resetModal();
@@ -259,13 +269,10 @@ function displayNonSeriesWarning(nonSeriesJobs) {
     listDiv.empty();
     
     let listHtml = '<ul class="mb-0">';
-    nonSeriesJobs.forEach(job => {
-        const escapedType = escapeHtml(job.type);
-        const typeBadge = job.type === 'movie' ? 
-            '<span class="badge badge-primary">Movie</span>' : 
-            `<span class="badge badge-secondary">${escapedType}</span>`;
-    listHtml += `<li>Job ${escapeHtml(job.id.toString())}: ${escapeHtml(job.title)} ${typeBadge}</li>`;
-    });
+    for (const job of nonSeriesJobs) {
+        const typeBadge = formatTypeBadge(job.type);
+        listHtml += `<li>Job ${escapeHtml(job.id.toString())}: ${escapeHtml(job.title)} ${typeBadge}</li>`;
+    }
     listHtml += '</ul>';
     
     listDiv.html(listHtml);
@@ -421,25 +428,20 @@ function displaySelectedDiscs() {
     container.empty();
     
     let html = '<ul class="mb-0">';
-    selectedJobs.forEach(jobId => {
+    for (const jobId of selectedJobs) {
         const row = $(`.batch-table-row[data-job-id="${jobId}"]`);
         const title = escapeHtml(row.find('.title-cell').text().trim());
         const label = escapeHtml(row.find('td:eq(5)').text().trim()); // Label column
         const type = row.data('video-type');
-        
-        const escapedType = escapeHtml(type);
-        const typeBadge = type === 'series' ? 
-            '<span class="badge badge-success">TV Series</span>' : 
-            type === 'movie' ?
-            '<span class="badge badge-primary">Movie</span>' :
-            `<span class="badge badge-secondary">${escapedType}</span>`;
-        
-    html += `<li>Job ${escapeHtml(jobId.toString())}: ${title} ${typeBadge}`;
+
+        const typeBadge = formatTypeBadge(type);
+
+        html += `<li>Job ${escapeHtml(jobId.toString())}: ${title} ${typeBadge}`;
         if (label && label !== '-') {
             html += ` - Label: ${label}`;
         }
         html += '</li>';
-    });
+    }
     html += '</ul>';
     
     container.html(html);
@@ -467,7 +469,7 @@ function performCustomSearch() {
             video_type: videoType
         }),
         success: function(response) {
-            if (response.success && response.results && response.results.length > 0) {
+            if (response.success && response.results?.length > 0) {
                 customLookupData = response;
                 displaySearchResults(response.results);
 
@@ -480,8 +482,9 @@ function performCustomSearch() {
         },
         error: function(xhr) {
             let msg = 'Search failed';
-            if (xhr.responseJSON && xhr.responseJSON.error) {
-                msg += ': ' + xhr.responseJSON.error;
+            const errorMessage = xhr.responseJSON?.error;
+            if (errorMessage) {
+                msg += ': ' + errorMessage;
             }
             BatchRenameShared.showToast(msg, 'danger');
         },
@@ -495,7 +498,8 @@ function displaySearchResults(results) {
     const container = $('#search-results-container');
     container.empty();
     
-    results.forEach((result, index) => {
+    for (let index = 0; index < results.length; index++) {
+        const result = results[index];
         const posterUrl = result.poster_url && result.poster_url !== 'N/A' ? 
             result.poster_url : 'static/img/none.png';
         
@@ -527,7 +531,7 @@ function displaySearchResults(results) {
         `;
         
         container.append(cardHtml);
-    });
+    }
     
     // Add click handlers
     $('.select-result-btn').on('click', function(e) {
@@ -543,7 +547,7 @@ function displaySearchResults(results) {
 }
 
 function selectSearchResult(index) {
-    if (!customLookupData || !customLookupData.results) {
+    if (!customLookupData?.results) {
         return;
     }
     
@@ -566,9 +570,7 @@ function displayCustomLookupConfirmation() {
     const posterUrl = selectedMatchData.poster_url && selectedMatchData.poster_url !== 'N/A' ? 
         selectedMatchData.poster_url : 'static/img/none.png';
     
-    const typeBadge = selectedMatchData.type === 'series' ? 
-        '<span class="badge badge-success">TV Series</span>' : 
-        '<span class="badge badge-primary">Movie</span>';
+    const typeBadge = formatTypeBadge(selectedMatchData.type, 'badge badge-primary');
     
     const posterEsc = escapeHtml(posterUrl);
     const titleEsc = escapeHtml(selectedMatchData.title);
@@ -597,21 +599,14 @@ function displayCustomLookupConfirmation() {
     const tbody = $('#lookup-confirm-table-body');
     tbody.empty();
     
-    selectedJobs.forEach(jobId => {
+    for (const jobId of selectedJobs) {
         const row = $(`.batch-table-row[data-job-id="${jobId}"]`);
         const currentTitle = row.find('.title-cell').text().trim();
         const currentType = row.data('video-type');
         const label = row.find('td:eq(5)').text().trim(); // Label column
         
-        const currentTypeBadge = currentType === 'series' ? 
-            '<span class="badge badge-success">TV Series</span>' : 
-            currentType === 'movie' ?
-            '<span class="badge badge-primary">Movie</span>' :
-            `<span class="badge badge-secondary">${currentType}</span>`;
-        
-        const newTypeBadge = selectedMatchData.type === 'series' ? 
-            '<span class="badge badge-success">TV Series</span>' : 
-            '<span class="badge badge-primary">Movie</span>';
+        const currentTypeBadge = formatTypeBadge(currentType);
+        const newTypeBadge = formatTypeBadge(selectedMatchData.type, 'badge badge-primary');
         
         const rowHtml = `
             <tr>
@@ -625,7 +620,7 @@ function displayCustomLookupConfirmation() {
         `;
         
         tbody.append(rowHtml);
-    });
+    }
 }
 
 function backToSearch() {
@@ -678,8 +673,9 @@ function applyCustomLookup() {
         },
         error: function(xhr) {
             let msg = 'Failed to apply custom identification';
-            if (xhr.responseJSON && xhr.responseJSON.error) {
-                msg += ': ' + xhr.responseJSON.error;
+            const errorMessage = xhr.responseJSON?.error;
+            if (errorMessage) {
+                msg += ': ' + errorMessage;
             }
             BatchRenameShared.showToast(msg, 'danger');
         },
@@ -706,11 +702,11 @@ function displayCustomLookupResults(response) {
     html += `<li><strong>IMDb ID:</strong> ${escapeHtml(selectedMatchData.imdb_id || 'N/A')}</li>`;
         html += '</ul>';
         
-        if (response.errors && response.errors.length > 0) {
+        if (response.errors?.length) {
             html += '<p><strong>Errors:</strong></p><ul>';
-            response.errors.forEach(error => {
+            for (const error of response.errors) {
                 html += `<li class="text-danger">${escapeHtml(error)}</li>`;
-            });
+            }
             html += '</ul>';
         }
         
@@ -719,7 +715,7 @@ function displayCustomLookupResults(response) {
     } else {
         html += '<div class="alert alert-danger">';
         html += '<h6><i class="fa fa-exclamation-circle"></i> Custom Identification Failed</h6>';
-    html += `<p>${escapeHtml(response.error)}</p>`;
+        html += `<p>${escapeHtml(response.error)}</p>`;
         html += '</div>';
     }
     

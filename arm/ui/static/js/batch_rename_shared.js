@@ -4,7 +4,7 @@
  */
 
 // Shared module namespace
-var BatchRenameShared = (function() {
+const BatchRenameShared = (() => {
     'use strict';
 
     /**
@@ -12,12 +12,13 @@ var BatchRenameShared = (function() {
      */
     function escapeHtml(unsafe) {
         if (unsafe == null) return '';
+        // Use replaceAll for readability (ES2021+) instead of regex replace globals
         return String(unsafe)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
     }
 
     /**
@@ -47,7 +48,7 @@ var BatchRenameShared = (function() {
         }
 
         let groupIndex = 0;
-        seriesGroups.forEach(group => {
+        for (const group of seriesGroups) {
             const isChecked = groupIndex === 0 ? 'checked' : '';
             const groupNameEsc = escapeHtml(group.display_name);
             const groupImdbEsc = group.imdb_id ? ' (' + escapeHtml(group.imdb_id) + ')' : '';
@@ -71,7 +72,7 @@ var BatchRenameShared = (function() {
             `;
             container.append(groupHtml);
             groupIndex++;
-        });
+        }
 
         // Add custom series name option
         const customOptionHtml = `
@@ -162,172 +163,229 @@ var BatchRenameShared = (function() {
     /**
      * Display preview of rename operations
      */
+    function renderPreviewWarnings(warnings) {
+        const warningDiv = $('#preview-warnings');
+        if (!warnings || warnings.length === 0) {
+            warningDiv.hide().empty();
+            return;
+        }
+
+        const warningHtml = '<strong>Warnings:</strong><ul>' +
+            warnings.map(w => '<li>' + escapeHtml(w) + '</li>').join('') +
+            '</ul>';
+        warningDiv.html(warningHtml).show();
+    }
+
+    function renderPreviewOutliers(outliers) {
+        const outlierDiv = $('#preview-outliers');
+        if (!outliers || outliers.length === 0) {
+            outlierDiv.hide().empty();
+            return;
+        }
+
+        let outlierHtml = '<strong>Series Outliers Detected:</strong><br>';
+        outlierHtml += '<small>The following jobs have different series identifiers:</small><ul>';
+        for (const outlier of outliers) {
+            outlierHtml += `<li>Job ${escapeHtml(outlier.job_id.toString())}: ${escapeHtml(outlier.title)} (IMDb: ${escapeHtml(outlier.imdb_id || 'N/A')})</li>`;
+        }
+        outlierHtml += '</ul>';
+        outlierHtml += '<small>These will be skipped unless you override series detection.</small>';
+        outlierDiv.html(outlierHtml).show();
+    }
+
+    function buildConflictLookup(conflicts) {
+        const lookup = {};
+        if (!conflicts) {
+            return lookup;
+        }
+
+        for (const conflict of conflicts) {
+            if (!conflict || typeof conflict !== 'object') {
+                return;
+            }
+            if (conflict.job_id) {
+                lookup[`job:${conflict.job_id}`] = conflict;
+            }
+            if (conflict.new_path) {
+                lookup[`path:${conflict.new_path}`] = conflict;
+            }
+        }
+
+        return lookup;
+    }
+
+    function prepareConflictDisplay(preview) {
+        const conflicts = preview.conflicts || [];
+        const conflictDiv = $('#preview-conflicts');
+        const executeBtn = $('#execute-rename-btn');
+        const autoResolve = Boolean(executeBtn.data('auto-resolve-conflicts'));
+
+        if (conflicts.length === 0) {
+            if (executeBtn.length) {
+                executeBtn.prop('disabled', false);
+            }
+            conflictDiv.hide().empty();
+            return { lookup: {}, autoResolve };
+        }
+
+        let conflictHtml = '<strong>Path Conflicts Detected:</strong><ul>';
+        for (const conflict of conflicts) {
+            if (typeof conflict === 'string') {
+                conflictHtml += `<li>${escapeHtml(conflict)}</li>`;
+            } else {
+                conflictHtml += `<li>Job ${escapeHtml(conflict.job_id.toString())}: ${escapeHtml(conflict.reason)}</li>`;
+            }
+        }
+        conflictHtml += '</ul>';
+
+        if (executeBtn.length) {
+            conflictHtml += '<strong>Conflicts will be resolved with timestamps during execution.</strong>';
+            conflictDiv.html(conflictHtml).show();
+        } else {
+            conflictHtml += '<strong>Cannot proceed with rename until conflicts are resolved.</strong>';
+            conflictDiv.html(conflictHtml).show();
+            $('#execute-rename-btn').prop('disabled', true);
+        }
+
+        return {
+            lookup: buildConflictLookup(conflicts),
+            autoResolve,
+        };
+    }
+
+    function normalizePreviewItems(preview) {
+        if (Array.isArray(preview.items)) {
+            return preview.items;
+        }
+        if (Array.isArray(preview.previews)) {
+            return preview.previews;
+        }
+        return [];
+    }
+
+    function deriveRowContext(item, conflictLookup, autoResolve) {
+        const jobId = item.job_id || item.jobId || item.id;
+        const title = item.title || item.series_name || 'N/A';
+        const discLabel = item.label || item.disc_label || item.discLabel || 'N/A';
+        const oldPath = item.old_path || item.oldPath || item.oldPathname || '';
+        const newPath = item.new_path || item.newPath || item.target_path || '';
+
+        const hasConflict = item.status === 'conflict' ||
+            conflictLookup[`job:${jobId}`] ||
+            (newPath && conflictLookup[`path:${newPath}`]);
+
+        let statusBadge;
+        let statusClass;
+
+        if (item.status === 'skipped' || item.fallback) {
+            statusBadge = '<span class="badge badge-secondary">Skipped/Fallback</span>';
+            statusClass = 'table-secondary';
+        } else if (hasConflict) {
+            if (autoResolve) {
+                statusBadge = '<span class="badge badge-warning">Conflict (will add timestamp)</span>';
+                statusClass = 'table-warning';
+            } else {
+                statusBadge = '<span class="badge badge-danger">Conflict</span>';
+                statusClass = 'table-danger';
+            }
+        } else {
+            statusBadge = '<span class="badge badge-success">Ready</span>';
+            statusClass = '';
+        }
+
+        return {
+            jobId: jobId ? jobId.toString() : 'N/A',
+            title,
+            discLabel,
+            oldPath,
+            newPath,
+            statusBadge,
+            statusClass,
+        };
+    }
+
+    function buildPreviewRow(context) {
+        return `
+            <tr class="${context.statusClass}">
+                <td>${escapeHtml(context.jobId)}</td>
+                <td>${escapeHtml(context.title)}</td>
+                <td>${escapeHtml(context.discLabel)}</td>
+                <td><small><code>${escapeHtml(context.oldPath)}</code></small></td>
+                <td><small><code>${escapeHtml(context.newPath)}</code></small></td>
+                <td>${context.statusBadge}</td>
+            </tr>
+        `;
+    }
+
     function displayPreview(preview) {
         const tbody = $('#preview-table-body');
         tbody.empty();
 
-        // Display warnings
-        if (preview.warnings && preview.warnings.length > 0) {
-            const warningDiv = $('#preview-warnings');
-            warningDiv.html('<strong>Warnings:</strong><ul>' +
-                preview.warnings.map(w => '<li>' + escapeHtml(w) + '</li>').join('') +
-                '</ul>');
-            warningDiv.show();
+        renderPreviewWarnings(preview.warnings);
+        renderPreviewOutliers(preview.outliers);
+
+        const conflictInfo = prepareConflictDisplay(preview);
+        const items = normalizePreviewItems(preview);
+
+        for (const item of items) {
+            const context = deriveRowContext(item, conflictInfo.lookup, conflictInfo.autoResolve);
+            tbody.append(buildPreviewRow(context));
         }
-
-        // Display outliers
-        if (preview.outliers && preview.outliers.length > 0) {
-            const outlierDiv = $('#preview-outliers');
-            let outlierHtml = '<strong>Series Outliers Detected:</strong><br>';
-            outlierHtml += '<small>The following jobs have different series identifiers:</small><ul>';
-            preview.outliers.forEach(outlier => {
-                outlierHtml += `<li>Job ${escapeHtml(outlier.job_id.toString())}: ${escapeHtml(outlier.title)} (IMDb: ${escapeHtml(outlier.imdb_id || 'N/A')})</li>`;
-            });
-            outlierHtml += '</ul>';
-            outlierHtml += '<small>These will be skipped unless you override series detection.</small>';
-            outlierDiv.html(outlierHtml);
-            outlierDiv.show();
-        }
-
-        // Display conflicts
-        if (preview.conflicts && preview.conflicts.length > 0) {
-            const conflictDiv = $('#preview-conflicts');
-            let conflictHtml = '<strong>Path Conflicts Detected:</strong><ul>';
-            preview.conflicts.forEach(conflict => {
-                if (typeof conflict === 'string') {
-                    conflictHtml += `<li>${escapeHtml(conflict)}</li>`;
-                } else {
-                    conflictHtml += `<li>Job ${escapeHtml(conflict.job_id.toString())}: ${escapeHtml(conflict.reason)}</li>`;
-                }
-            });
-            conflictHtml += '</ul>';
-
-            // Different handling based on page context
-            if ($('#execute-rename-btn').length) {
-                // batch_rename_page.js - conflicts resolved with timestamps
-                conflictHtml += '<strong>Conflicts will be resolved with timestamps during execution.</strong>';
-                conflictDiv.html(conflictHtml);
-                conflictDiv.show();
-            } else {
-                // database_batch_rename.js - conflicts block execution
-                conflictHtml += '<strong>Cannot proceed with rename until conflicts are resolved.</strong>';
-                conflictDiv.html(conflictHtml);
-                conflictDiv.show();
-                $('#execute-rename-btn').prop('disabled', true);
-            }
-        } else {
-            const executeBtn = $('#execute-rename-btn');
-            if (executeBtn.length) {
-                executeBtn.prop('disabled', false);
-            }
-        }
-
-        // Display preview table
-        const items = preview.items || preview.previews || [];
-
-        // Build quick lookup for conflicts by job_id or new_path
-        const conflictByJob = {};
-        if (preview.conflicts && preview.conflicts.length) {
-            preview.conflicts.forEach(c => {
-                if (typeof c === 'string') {
-                    return;
-                }
-                if (c.job_id) {
-                    conflictByJob[c.job_id] = c;
-                } else if (c.new_path) {
-                    conflictByJob[c.new_path] = c;
-                }
-            });
-        }
-
-        items.forEach(item => {
-            let statusBadge = '';
-            let statusClass = '';
-
-            // Normalize fields across merged versions
-            const jobId = item.job_id || item.jobId || item.id;
-            const title = item.title || item.series_name || 'N/A';
-            const discLabel = item.label || item.disc_label || item.discLabel || 'N/A';
-            const oldPath = item.old_path || item.oldPath || item.oldPathname || '';
-            const newPath = item.new_path || item.newPath || item.target_path || '';
-
-            // Determine status
-            if (item.status === 'skipped' || item.fallback) {
-                statusBadge = '<span class="badge badge-secondary">Skipped/Fallback</span>';
-                statusClass = 'table-secondary';
-            } else if (item.status === 'conflict' || conflictByJob[jobId] || conflictByJob[newPath]) {
-                // Check if conflicts are automatically resolved
-                if ($('#execute-rename-btn').data('auto-resolve-conflicts')) {
-                    statusBadge = '<span class="badge badge-warning">Conflict (will add timestamp)</span>';
-                    statusClass = 'table-warning';
-                } else {
-                    statusBadge = '<span class="badge badge-danger">Conflict</span>';
-                    statusClass = 'table-danger';
-                }
-            } else {
-                statusBadge = '<span class="badge badge-success">Ready</span>';
-                statusClass = '';
-            }
-
-            const row = `
-                <tr class="${statusClass}">
-                    <td>${escapeHtml(jobId.toString())}</td>
-                    <td>${escapeHtml(title)}</td>
-                    <td>${escapeHtml(discLabel)}</td>
-                    <td><small><code>${escapeHtml(oldPath)}</code></small></td>
-                    <td><small><code>${escapeHtml(newPath)}</code></small></td>
-                    <td>${statusBadge}</td>
-                </tr>
-            `;
-            tbody.append(row);
-        });
     }
 
     /**
      * Display results of rename operation
      */
+    function buildSuccessResultsHtml(response) {
+        let html = '<div class="alert alert-success">';
+        html += '<h6><i class="fa fa-check-circle"></i> Batch Rename Successful</h6>';
+        html += `<p>Batch ID: <code>${escapeHtml(response.batch_id)}</code></p>`;
+        html += `<p>Renamed ${escapeHtml(response.renamed_count.toString())} folders</p>`;
+
+        if (response.skipped?.length) {
+            html += '<p><strong>Skipped jobs:</strong></p><ul>';
+            for (const skip of response.skipped) {
+                html += `<li>Job ${escapeHtml(skip.job_id.toString())}: ${escapeHtml(skip.reason)}</li>`;
+            }
+            html += '</ul>';
+        }
+
+        html += '</div>';
+        return html;
+    }
+
+    function buildFailureResultsHtml(response) {
+        let html = '<div class="alert alert-danger">';
+        html += '<h6><i class="fa fa-exclamation-circle"></i> Batch Rename Failed</h6>';
+        html += `<p>${escapeHtml(response.message)}</p>`;
+
+        if (response.errors?.length) {
+            html += '<p><strong>Errors:</strong></p><ul>';
+            for (const error of response.errors) {
+                html += `<li>${escapeHtml(error)}</li>`;
+            }
+            html += '</ul>';
+        }
+
+        html += '</div>';
+        return html;
+    }
+
     function displayResults(response) {
         const resultsDiv = $('#results-content');
         resultsDiv.empty();
 
-        let html = '';
+        let html;
 
         if (response.success) {
-            html += '<div class="alert alert-success">';
-            html += '<h6><i class="fa fa-check-circle"></i> Batch Rename Successful</h6>';
-            html += `<p>Batch ID: <code>${escapeHtml(response.batch_id)}</code></p>`;
-            html += `<p>Renamed ${escapeHtml(response.renamed_count.toString())} folders</p>`;
-
-            if (response.skipped && response.skipped.length > 0) {
-                html += '<p><strong>Skipped jobs:</strong></p><ul>';
-                response.skipped.forEach(skip => {
-                    html += `<li>Job ${skip.job_id}: ${skip.reason}</li>`;
-                });
-                html += '</ul>';
-            }
-
-            html += '</div>';
-
-            // Show rollback button
+            html = buildSuccessResultsHtml(response);
             $('#rollback-btn').show();
         } else {
-            html += '<div class="alert alert-danger">';
-            html += '<h6><i class="fa fa-exclamation-circle"></i> Batch Rename Failed</h6>';
-            html += `<p>${escapeHtml(response.message)}</p>`;
-
-            if (response.errors && response.errors.length > 0) {
-                html += '<p><strong>Errors:</strong></p><ul>';
-                response.errors.forEach(error => {
-                    html += `<li>${escapeHtml(error)}</li>`;
-                });
-                html += '</ul>';
-            }
-
-            html += '</div>';
-
-            // Show rollback button if partial success
+            html = buildFailureResultsHtml(response);
             if (response.batch_id) {
                 $('#rollback-btn').show();
+            } else {
+                $('#rollback-btn').hide();
             }
         }
 
@@ -400,11 +458,11 @@ var BatchRenameShared = (function() {
                 // API returns preview object directly, not wrapped in {success, preview}
                 console.log('Series detection response:', response);
                 
-                if (response && (response.success === false || response.error)) {
+                if (response?.success === false || response?.error) {
                     // Explicit error response
                     const errorMsg = response.error || response.message || 'Unknown error';
                     showToast('Series detection failed: ' + errorMsg, 'danger');
-                } else if (response && (response.items || response.previews || response.series_info || response.requires_series_selection)) {
+                } else if (response?.items || response?.previews || response?.series_info || response?.requires_series_selection) {
                     // Valid preview response (items may be empty if selection required)
                     callback(response);
                 } else {
@@ -414,10 +472,9 @@ var BatchRenameShared = (function() {
             },
             error: function(xhr) {
                 let msg = 'Failed to detect series';
-                if (xhr.responseJSON && xhr.responseJSON.error) {
-                    msg += ': ' + xhr.responseJSON.error;
-                } else if (xhr.responseJSON && xhr.responseJSON.message) {
-                    msg += ': ' + xhr.responseJSON.message;
+                const errorDetails = xhr.responseJSON?.error || xhr.responseJSON?.message;
+                if (errorDetails) {
+                    msg += ': ' + errorDetails;
                 }
                 showToast(msg, 'danger');
             },
@@ -455,17 +512,6 @@ var BatchRenameShared = (function() {
             }
         }
 
-        // Mark all jobs as using the selected series (force override)
-        const outlierResolution = {};
-        $('input[name="primarySeries"]').each(function() {
-            const radioKey = $(this).val();
-            if (radioKey !== selectedSeriesKey) {
-                // All jobs from non-selected series should use selected series
-                const seriesInfo = $(this).closest('.form-check').data('series-info') || {};
-                // This will be handled by backend based on selected_series_key
-            }
-        });
-
         const options = {
             job_ids: Array.from(selectedJobs),
             naming_style: $('#naming-style').val(),
@@ -493,11 +539,11 @@ var BatchRenameShared = (function() {
                 // API returns preview object directly, not wrapped in {success, preview}
                 console.log('Preview with series response:', response);
                 
-                if (response && (response.success === false || response.error)) {
+                if (response?.success === false || response?.error) {
                     // Explicit error response
                     const errorMsg = response.error || response.message || 'Unknown error';
                     showToast('Preview failed: ' + errorMsg, 'danger');
-                } else if (response && (response.items || response.previews || response.series_info)) {
+                } else if (response?.items || response?.previews || response?.series_info) {
                     // Valid preview response
                     callback(response);
                 } else {
@@ -507,10 +553,9 @@ var BatchRenameShared = (function() {
             },
             error: function(xhr) {
                 let msg = 'Failed to generate preview';
-                if (xhr.responseJSON && xhr.responseJSON.error) {
-                    msg += ': ' + xhr.responseJSON.error;
-                } else if (xhr.responseJSON && xhr.responseJSON.message) {
-                    msg += ': ' + xhr.responseJSON.message;
+                const errorDetails = xhr.responseJSON?.error || xhr.responseJSON?.message;
+                if (errorDetails) {
+                    msg += ': ' + errorDetails;
                 }
                 showToast(msg, 'danger');
             },
@@ -574,7 +619,7 @@ var BatchRenameShared = (function() {
                 console.log('Execute rename response:', response);
                 
                 // Check for errors in the response
-                if (response.errors && response.errors.length > 0) {
+                if (response.errors?.length) {
                     console.error('Rename errors:', response.errors);
                     // Show first error to user
                     showToast('Rename failed: ' + response.errors[0], 'danger');
@@ -585,10 +630,9 @@ var BatchRenameShared = (function() {
             error: function(xhr) {
                 console.error('Execute rename XHR error:', xhr);
                 let msg = 'Failed to execute rename';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    msg += ': ' + xhr.responseJSON.message;
-                } else if (xhr.responseJSON && xhr.responseJSON.error) {
-                    msg += ': ' + xhr.responseJSON.error;
+                const errorMessage = xhr.responseJSON?.message || xhr.responseJSON?.error;
+                if (errorMessage) {
+                    msg += ': ' + errorMessage;
                 } else if (xhr.responseText) {
                     console.error('Response text:', xhr.responseText);
                     msg += ' (see console for details)';
@@ -638,8 +682,9 @@ var BatchRenameShared = (function() {
             },
             error: function(xhr) {
                 let msg = 'Failed to rollback';
-                if (xhr.responseJSON && xhr.responseJSON.message) {
-                    msg += ': ' + xhr.responseJSON.message;
+                const errorDetails = xhr.responseJSON?.message;
+                if (errorDetails) {
+                    msg += ': ' + errorDetails;
                 }
                 showToast(msg, 'danger');
             },
