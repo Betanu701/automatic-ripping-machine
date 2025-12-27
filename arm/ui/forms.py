@@ -99,6 +99,15 @@ class AbcdeForm(FlaskForm):
     submit = SubmitField('Submit')
 
 
+class BatchRenameForm(FlaskForm):
+    """Batch rename form for selecting multiple completed jobs"""
+    selected_jobs = FieldList(HiddenField('job_id'), min_entries=0)
+    series_name = StringField('Series Name', validators=[Optional()])
+    use_custom_name = BooleanField('Use Custom Name')
+    custom_name = StringField('Custom Name', validators=[Optional()])
+    submit = SubmitField('Rename Selected Jobs')
+
+
 class SystemInfoDrives(FlaskForm):
     """
     SystemInformation Form, to update system drive name (nickname) and description

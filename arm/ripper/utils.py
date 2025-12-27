@@ -176,6 +176,16 @@ def fix_job_title(job):
     :param job:
     :return: corrected job.title
     """
+    # Check if we should use the disc label for TV series
+    # This helps avoid timestamp-based duplicate folders when episodes are not well-defined
+    if (cfg.arm_config.get("USE_DISC_LABEL_FOR_TV_SERIES", False) and 
+        job.label and job.video_type == "series"):
+        # Use the disc label for TV series, clean it for use as a filename
+        job_title = clean_for_filename(job.label)
+        logging.info(f"Using disc label '{job.label}' for TV series folder name: '{job_title}'")
+        return job_title
+    
+    # Default behavior: use movie title with year
     if job.year and job.year != "0000" and job.year != "":
         if job.title_manual:
             job_title = f"{job.title_manual} ({job.year})"

@@ -120,6 +120,13 @@ UNIDENTIFIED_EJECT: true
 # Set to false to disable auto-ejection
 AUTO_EJECT: true
 
+# Use DVD label as output folder name for TV series with undefined episodes
+# When set to true, the DVD label (disc volume name) will be used as the folder name for TV series
+# to avoid timestamp-based duplicate folders when episodes are not properly defined
+# When set to false (default), the movie title from database lookup will be used
+# This helps with batch renaming TV episodes using external tools
+USE_DISC_LABEL_FOR_TV_SERIES: false
+
 
 #####################
 ## Directory setup ##
